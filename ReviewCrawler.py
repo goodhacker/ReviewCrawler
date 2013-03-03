@@ -60,16 +60,16 @@ class TaobaoCrawler:
                 print title
                 params = self.crawlTmallQueryParameters(soup)
                 print params
-                dataList = self.getReviewsFromTmallPage(params)
-                self.writeToCSV(title,dataList)
+                dataList = self.getReviewsFromTmallPage(title,params)
+               # self.writeToCSV(title,dataList)
                 #continue
             else:
                 title = self.getTaobaoItemTitle(soup)
                 print title
                 params = self.crawlTaobaoQueryParameters(soup)
                 print params
-                dataList = self.getReviewsFromTaobaoPage(params)
-                self.writeToCSV(title,dataList)
+                dataList = self.getReviewsFromTaobaoPage(title,params)
+                #self.writeToCSV(title,dataList)
             #将url放入已访问的url中
             self.linkQuence.addVisitedUrl(visitUrl)
      #写入文件       
@@ -119,7 +119,7 @@ class TaobaoCrawler:
                 d.pop(key)
         return d
 
-    def getPageFromUrl(self,url,params = None,timeout=1000,coding=None):
+    def getPageFromUrl(self,url,params = None,timeout=20,coding=None):
         try:
             socket.setdefaulttimeout(timeout)
             if params:
@@ -158,79 +158,94 @@ class TaobaoCrawler:
        # except Exception,e:
        #     print e
        
-    def getReviewsFromTmallPage(self,params):
+    def generateReviewUrl(self,prefix,params):
+        for key in params.keys():
+            prefix=prefix+"%s=%s"%(key,params[key])+"&"
+        return prefix[:-1]
+
+    def getPageError(self,content,currentPage):
+        print "Error! Page%d"%currentPage        
+
+    def getReviewsFromTmallPage(self,title,params):
        info = self.getPageFromUrl('http://rate.tmall.com/list_detail_rate.htm?',params = params)
        j = json.loads("{"+info+"}")
        currentPage = j["rateDetail"]["paginator"]["page"]
        lastPage = j["rateDetail"]["paginator"]["lastPage"]
-       dataL = []
+       
        for cp in range(currentPage,lastPage):
            print cp
           # if cp > 2:
           #     break
            params["currentPage"] = cp
-           info = self.getPageFromUrl('http://rate.tmall.com/list_detail_rate.htm?',params = params)
-           j = json.loads("{"+info+"}")
-           for item in j["rateDetail"]["rateList"]:
-               d = {}
-               if item["useful"]:
-                   d["userNick"] = item["displayUserNick"]
-                   d["userId"] = unicode(item["displayUserNumId"])
-                   d["reviewContent"] = item["rateContent"]
-                   d["reviewTime"] = item["rateDate"]
-                   d["appendReview"] = ""
-                   d["appendTime"] = ""
-                   if len(item["appendComment"]) > 0:
-                       d["appendReview"] = item["appendComment"]["content"]
-                       d["appendTime"] = item["appendComment"]["commentTime"]
-                   dataL.append(d)
-                 #  print type(d["userNick"])
-                 #  print type(d["userId"])
-                 #  print type(d["reviewContent"])
-                 #  print type(d["reviewTime"])
-                 #  print "******************************************"
-                   
-       return dataL
-    
-    def getReviewsFromTaobaoPage(self,params):
-        cp = 1
+          # info = self.getPageFromUrl('http://rate.tmall.com/list_detail_rate.htm?',params = params)
+           url=self.generateReviewUrl('http://rate.tmall.com/list_detail_rate.htm?',params = params)        
+           page=getPage(url,timeout=20)
+           page.addCallback(self.parseTaobaoReviewJson)           
+           page.addCallback(self.writeToCSV,title=title)
+           page.addErrorback(self.getPageError,cp)
+           cp = cp+1
+           
+    def parseTaobaoReviewJson(self,info):
         dataL = []
+        j = json.loads("{"+info+"}")
+        for item in j["rateDetail"]["rateList"]:
+            d = {}
+            if item["useful"]:
+                d["userNick"] = item["displayUserNick"]
+                d["userId"] = unicode(item["displayUserNumId"])
+                d["reviewContent"] = item["rateContent"]
+                d["reviewTime"] = item["rateDate"]
+                d["appendReview"] = ""
+                d["appendTime"] = ""
+                if len(item["appendComment"]) > 0:
+                    d["appendReview"] = item["appendComment"]["content"]
+                    d["appendTime"] = item["appendComment"]["commentTime"]
+                dataL.append(d)
+             #  print type(d["userNick"])
+             #  print type(d["userId"])
+             #  print type(d["reviewContent"])
+             #  print type(d["reviewTime"])
+             #  print "******************************************"
+        return dataL
+
+    def getReviewsFromTaobaoPage(self,title,params):
+        cp = 1        
         while True:
             print cp
             params["currentPageNum"] = cp
-            info = self.getPageFromUrl('http://rate.taobao.com/feedRateList.htm?',params = params)
-            if type(info) == None:
-                print "info NoneType"
-                continue
-            #print info[info.find("(")+1:info.find(")",-1)-2]
-            try:
-                j = json.loads(info[info.find("(")+1:info.find(")",-1)-2].replace("\n","")
-)
-            except Exception,e:
-                print e
-                print "Error %d"%cp
-                cp = cp+1
-                continue
-            if j["maxPage"] == j["currentPageNum"]:
-                break
-            for item in j["comments"]:
-                d = {}
-                d["userNick"] = item["user"]["nick"]
-                d["userId"] = unicode(item["user"]["userId"])
-                d["userLink"] = item["user"]["nickUrl"]
-                d["reviewContent"] = item["content"]
-                d["reviewTime"] = item["date"]
-                d["appendReview"] = ""
-                #d["appendTime"] = ""
-                #print item["append"]
-                if item["append"] is not None:
-                    d["appendReview"] = item["append"]["content"]
-                       #d["appendTime"] = item["appendComment"]["commentTime"]
-                dataL.append(d)
+            #info = self.getPageFromUrl('http://rate.taobao.com/feedRateList.htm?',params = params)
+            url = self.generateReviewUrl('http://rate.taobao.com/feedRateList.htm?',params = params)
+            page = getPage(url,timeout=20)
+            page.addCallback(self.parseTaobaoReviewJson)
+            page.addCallback(self.writeToCSV(title=title))
+            page.addErrorback(self.getPageError,cp)
             cp = cp+1
 
+    def parseTaobaoReviewJson(self,info):
+        dataL = []
+        try:
+            j = json.loads(info[info.find("(")+1:info.find(")",-1)-2].replace("\n",""))
+        except Exception,e:
+            print e
+        if j["maxPage"] == j["currentPageNum"]:
+            return dataL
+        for item in j["comments"]:
+            d = {}
+            d["userNick"] = item["user"]["nick"]
+            d["userId"] = unicode(item["user"]["userId"])
+            d["userLink"] = item["user"]["nickUrl"]
+            d["reviewContent"] = item["content"]
+            d["reviewTime"] = item["date"]
+            d["appendReview"] = ""
+            #d["appendTime"] = ""
+            #print item["append"]
+            if item["append"] is not None:
+                d["appendReview"] = item["append"]["content"]
+                #d["appendTime"] = item["appendComment"]["commentTime"]
+            dataL.append(d)
+
         return dataL
-                      
+
 class linkQuence:
     def __init__(self):
         #已访问的url集合
