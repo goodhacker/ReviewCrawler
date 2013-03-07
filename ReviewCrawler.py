@@ -6,19 +6,12 @@ import re
 import time
 import socket
 import json
-import csv
-import codecs
-import cStringIO
-from twisted.internet import reactor
-from twisted.web.client import getPage
-from twisted.web.error import Error
-import time
 
 headers = {
     "User-Agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.91 Safari/537.11"
 }
 
-class TaobaoCrawler:
+class Crawler:
     def __init__(self,seed):
         #使用种子初始化url队列
         self.linkQuence=linkQuence()
@@ -57,82 +50,16 @@ class TaobaoCrawler:
             if visitUrl is None or visitUrl=="":
                 continue
             print visitUrl
-            try:
-                page = self.getPageFromUrl(visitUrl)
-            except:
-                self.linkQuence.addUnvisitedUrl(visitUrl)
-                continue
-            soup = BeautifulSoup(page)
-            if visitUrl.find("tmall") > -1:               
-                title = self.getTmallItemTitle(soup)
-                print title.decode("utf-8").encode("gb2312")
-                params = self.crawlTmallQueryParameters(soup)
-                print params
-                dataList = self.getReviewsFromTmallPage(title,params)
-               # self.writeToCSV(title,dataList)
-                #continue
+               
+            if visitUrl.find("tmall") > -1:
+                crawler = TmallCrawler(visitUrl)
+                crawler.crawle()
             else:
-                title = self.getTaobaoItemTitle(soup)
-                print title.decode("utf-8").encode("gb2312")
-                params = self.crawlTaobaoQueryParameters(soup)
-                print params
-                params["rateType"]=1
-                dataList = self.getReviewsFromTaobaoPage(title,params)
-                #self.writeToCSV(title,dataList)
+                crawler = TaobaoCrawler(visitUrl)
+                crawler.crawle()             
             #将url放入已访问的url中
             self.linkQuence.addVisitedUrl(visitUrl)
-     #写入文件       
-    def writeToCSV(self,dataL,title):
-        if len(dataL)==0:
-            return
-        fieldnames = ['reviewContent', 'reviewTime', 'userNick', 'userId','userLink','appendReview','appendTime']
-        #dict_writer = csv.DictWriter(codecs.open(title+".csv", "w","utf-8"), fieldnames=fieldnames)
-    #   dict_writer.writerow(fieldnames) # CSV第一行需要自己加入
-        f = open(title+'.csv','w')
-        print "writeToCSV"
-        print title
-        print dataL
-        dict_writer = DictUnicodeWriter(f,fieldnames)
-        dict_writer.writeheader()
-        dict_writer.writerows(dataL)  # rows就是表单提交的数据
-        dataL=[]
-        f.close()
-        
-    #产品标题    
-    def getTmallItemTitle(self,soup):
-        return soup.find(id="mainwrap").find(id="detail").find("a").get_text().encode("utf-8")
-    def getTaobaoItemTitle(self,soup):
-        return soup.find(id="page").find(id="detail").find("h3").get_text().encode("utf-8")
-        
-    def crawlTmallQueryParameters(self,soup):     
-        script = soup.find("div",id="J_itemViewed").find_next().get_text()
-        d = {}
-        d['spuId'] = self.findIdString(script,'spuId')
-        d['sellerId'] = self.findIdString(script,'userId')
-        d['itemId'] = self.findIdString(script,'itemId')
-        return d
-
-    def findIdString(self,script,string):
-        start = script.find(string)
-        quotation = script[start-1]
-        idStart = script.find(quotation,script.find(":",start))
-        sId = script[idStart+1:script.find(quotation,idStart+1)]
-        return sId
-
-    def crawlTaobaoQueryParameters(self,soup):
-        reviewUrl = soup.find("div",id="reviews",class_="J_DetailSection").get("data-listapi")
-        #print soup.find("div",id="reviews",class_="J_DetailSection")
-        print reviewUrl
-        paramList = reviewUrl[reviewUrl.find("?")+1:].split("&")
-        d = {}
-        for param in paramList:
-            p = param.split("=")
-            d[p[0]] = p[1]
-        for key in d.keys():
-            if key not in ["userNumId","auctionNumId"]:
-                d.pop(key)
-        return d
-
+ 
     def getPageFromUrl(self,url,params = None,timeout=20,coding=None):
         try:
             socket.setdefaulttimeout(timeout)
@@ -153,31 +80,7 @@ class TaobaoCrawler:
                 print "coding = %s"%coding
             return page       
         except Exception,e:
-            print e
-        
-    
-    #获取网页源码
-    def crawlReviews(self,url,timeout=20,coding=None):
-      #  try:
-            #socket.setdefaulttimeout(timeout)
-            req = urllib2.Request(url=url,headers = headers)
-            response = urllib2.urlopen(req)
-            if coding is None:
-                coding= response.headers.getparam("charset")
-            if coding is None:
-                page=response.read()
-            else:
-                page=response.read()
-                page=page.decode(coding).encode('utf-8')
-            #print response.url
-            self.getReviewsInPage(url,page)         
-       # except Exception,e:
-       #     print e
-       
-    def generateReviewUrl(self,prefix,params):
-        for key in params.keys():
-            prefix=prefix+"%s=%s"%(key,params[key])+"&"
-        return str(prefix[:-1])
+            print e  
 
     def getPageError(self,content,currentPage):
         print "Error! Page%d"%currentPage        
@@ -185,98 +88,7 @@ class TaobaoCrawler:
         print type(content)
         #reactor.stop()
 
-    def getReviewsFromTmallPage(self,title,params):
-       info = self.getPageFromUrl('http://rate.tmall.com/list_detail_rate.htm?',params = params)
-       j = json.loads("{"+info+"}")
-       currentPage = j["rateDetail"]["paginator"]["page"]
-       lastPage = j["rateDetail"]["paginator"]["lastPage"]
-       
-       for cp in range(currentPage,lastPage):
-           print cp
-           if cp%100 == 0:
-              time.sleep(60)
-          # if cp > 2:
-          #     break
-           params["currentPage"] = cp
-          # info = self.getPageFromUrl('http://rate.tmall.com/list_detail_rate.htm?',params = params)
-           url=self.generateReviewUrl('http://rate.tmall.com/list_detail_rate.htm?',params = params)        
-           page=getPage(url,timeout=20)
-           page.addCallback(self.parseTmallReviewJson)           
-           page.addCallback(self.writeToCSV,title=title)
-           page.addErrback(self.getPageError,cp)
-           
-    def parseTmallReviewJson(self,info):
-        dataL = []
-        j = json.loads("{"+unicode(info,"gbk")+"}")
-        for item in j["rateDetail"]["rateList"]:
-            d = {}
-            if item["useful"]:
-                if item["dsr"] < 4:
-                    continue
-                if len(item["rateContent"]) < 15:
-                    continue
-                d["userNick"] = item["displayUserNick"]
-                d["userId"] = unicode(item["displayUserNumId"])
-                d["reviewContent"] = item["rateContent"]
-                d["reviewTime"] = item["rateDate"]
-                d["appendReview"] = ""
-                d["appendTime"] = ""
-                if len(item["appendComment"]) > 0:
-                    d["appendReview"] = item["appendComment"]["content"]
-                    d["appendTime"] = item["appendComment"]["commentTime"]
-                dataL.append(d)
-             #  print type(d["userNick"])
-             #  print type(d["userId"])
-             #  print type(d["reviewContent"])
-             #  print type(d["reviewTime"])
-             #  print "******************************************"
-        return dataL
-
-    def getReviewsFromTaobaoPage(self,title,params):
-        cp = 1        
-        for cp in range(1,15000):
-            #if cp%50 == 0:
-            #   reactor.run()
-            #   time.sleep(2)
-            print cp
-            params["currentPageNum"] = cp
-            #info = self.getPageFromUrl('http://rate.taobao.com/feedRateList.htm?',params = params)
-            url = self.generateReviewUrl('http://rate.taobao.com/feedRateList.htm?',params = params)
-            print url
-            page = getPage(url,timeout=20)
-            page.addCallback(self.parseTaobaoReviewJson)
-            page.addCallback(self.writeToCSV,title=title)
-            page.addErrback(self.getPageError,cp)
-        reactor.run()
-
-    def parseTaobaoReviewJson(self,info):
-        dataL = []
-        try:
-            j = json.loads(unicode(info[info.find("(")+1:info.find(")",-1)-2].replace("\n",""),"gbk"))
-        except Exception,e:
-            print e
-        if j["maxPage"] == j["currentPageNum"]:
-            #raise Exception("stop")
-            return dataL
-        for item in j["comments"]:
-            if len(item["content"]) < 15:
-                continue
-            d = {}
-            d["userNick"] = item["user"]["nick"]
-            d["userId"] = unicode(item["user"]["userId"])
-            d["userLink"] = item["user"]["nickUrl"]
-            d["reviewContent"] = item["content"]
-            d["reviewTime"] = item["date"]
-            d["appendReview"] = ""
-            #d["appendTime"] = ""
-            #print item["append"]
-            if item["append"] is not None:
-                d["appendReview"] = item["append"]["content"]
-                #d["appendTime"] = item["appendComment"]["commentTime"]
-            dataL.append(d)
-
-        return dataL
-
+  
 class linkQuence:
     def __init__(self):
         #已访问的url集合
@@ -337,40 +149,10 @@ class QuenceFileIO:
             urls.append(line)
         f.close()
         return urls
-
-#This class from http://stackoverflow.com/questions/5838605/python-dictwriter-writing-utf-8-encoded-csv-files
-class DictUnicodeWriter(object):
-
-    def __init__(self, f, fieldnames, dialect=csv.excel, encoding="utf-8", **kwds):
-        # Redirect output to a queue
-        self.queue = cStringIO.StringIO()
-        self.writer = csv.DictWriter(self.queue, fieldnames, dialect=dialect, **kwds)
-        self.stream = f
-        self.encoder = codecs.getincrementalencoder(encoding)()
-
-    def writerow(self, D):
-        for k in D.keys():
-            self.writer.writerow({k:D[k].encode("utf-8")})
-        # Fetch UTF-8 output from the queue ...
-        data = self.queue.getvalue()
-        data = data.decode("utf-8")
-        # ... and reencode it into the target encoding
-        data = self.encoder.encode(data)
-        # write to the target stream
-        self.stream.write(data)
-        # empty queue
-        self.queue.truncate(0)
-
-    def writerows(self, rows):
-        for D in rows:
-            self.writerow(D)
-
-    def writeheader(self):
-        self.writer.writeheader()
         
     
 def main(seeds):
-    craw=TaobaoCrawler(seeds)
+    craw=Crawler(seeds)
     craw.crawling(seeds)
 
 if __name__=="__main__":
