@@ -1,12 +1,16 @@
 #encoding=utf-8
 import json
+import time
 from bs4 import BeautifulSoup
-import BaseReviewCrawler
 from twisted.internet import reactor,defer
 from twisted.web.client import getPage
 from twisted.web.error import Error
+from BaseReviewCrawler import BaseReviewCrawler
 
 class TaobaoCrawler(BaseReviewCrawler):
+
+    def __init__(self):
+        pass
     
     def getItemTitle(self,soup):
         return soup.find(id="page").find(id="detail").find("h3").get_text().encode("utf-8")
@@ -70,8 +74,10 @@ class TaobaoCrawler(BaseReviewCrawler):
 
         return dataL
 
-
 class TmallCrawler(BaseReviewCrawler):
+
+    def __init__(self):
+        pass
     
     def getItemTitle(self,soup):
         return soup.find(id="mainwrap").find(id="detail").find("a").get_text().encode("utf-8")
@@ -138,3 +144,5 @@ class TmallCrawler(BaseReviewCrawler):
              #  print "******************************************"
         return dataL
 
+crawler = TmallCrawler()
+crawler.crawl("http://detail.tmall.com/item.htm?id=14944940915")

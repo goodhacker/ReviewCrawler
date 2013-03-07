@@ -5,7 +5,6 @@ import urllib2
 import re
 import time
 import socket
-import json
 
 headers = {
     "User-Agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.91 Safari/537.11"
@@ -81,12 +80,6 @@ class Crawler:
             return page       
         except Exception,e:
             print e  
-
-    def getPageError(self,content,currentPage):
-        print "Error! Page%d"%currentPage        
-        print content
-        print type(content)
-        #reactor.stop()
 
   
 class linkQuence:

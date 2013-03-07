@@ -1,8 +1,17 @@
 #encoding=utf-8
+from bs4 import BeautifulSoup
 import DictUnicodeWriter
+import socket
+import urllib2
+import urllib
+
+headers = {
+    "User-Agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.91 Safari/537.11"
+}
 
 class BaseReviewCrawler:
     def __init__(self,url):
+        print "Base"
         baseUrl = url
              
     def writeToCSV(self,dataL,title):
@@ -77,13 +86,20 @@ class BaseReviewCrawler:
     def parseReviewJson(self,Json):
         raise NotImplementedException
 
-    def crawl():
-        page = self.getPageFromUrl(self.baseUrl)
+    def crawl(self,url):
+        print url
+        page = self.getPageFromUrl(url)
+        print page
         soup = BeautifulSoup(page)
         title = self.getItemTitle(soup)
         print title.decode("utf-8").encode("gb2312")
-        params = self.TmallQueryParameters(soup)
+        params = self.crawlQueryParameters(soup)
         print params
         dataList = self.getReviewsFromPage(title,params)
         # self.writeToCSV(title,dataList)
 
+    def getPageError(self,content,currentPage):
+        print "Error! Page%d"%currentPage        
+        print content
+        print type(content)
+        #reactor.stop()
