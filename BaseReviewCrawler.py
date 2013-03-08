@@ -6,8 +6,10 @@ import csv
 import socket
 import urllib2
 import urllib
-from twisted.internet import reactor
+from twisted.internet import reactor,defer
+from twisted.web.client import getPage
 
+TIMEOUT = 20
 headers = {
     "User-Agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.91 Safari/537.11"
 }
@@ -21,12 +23,11 @@ class BaseReviewCrawler:
         if len(dataL)==0:
             return
         print "writeToCSV"
-        print title
-        fieldnames = ['reviewContent', 'reviewTime', 'userNick', 'userId','userLink','appendReview','appendTime']
+        fieldnames = ['id','reviewContent', 'reviewTime', 'degree','userNick', 'userId','userLink','appendId','appendReview','appendTime']
         #dict_writer = csv.DictWriter(codecs.open(title+".csv", "w","utf-8"), fieldnames=fieldnames)
     #   dict_writer.writerow(fieldnames) # CSV??????????????????
         f = open(title.decode("utf-8")+'.csv','a')
-        dict_writer = DictUnicodeWriter(f,fieldnames)
+        dict_writer = DictUnicodeWriter(f,fieldnames,delimiter="\t")
         dict_writer.writeheader()
         dict_writer.writerows(dataL)  # rows??????????????????
         dataL=[]
@@ -87,6 +88,9 @@ class BaseReviewCrawler:
     def getReviewsFromPage(self,title,params):
         raise NotImplementedException
 
+   # def getReviewsFromPage(self,url,title):
+   #     raise NotImplementedException
+
     def parseReviewJson(self,Json):
         raise NotImplementedException
 
@@ -98,14 +102,37 @@ class BaseReviewCrawler:
         print title.decode("utf-8").encode("gb2312")
         params = self.crawlQueryParameters(soup)
         print params
-        #import pdb
-        #pdb.set_trace()
         self.getReviewsFromPage(title,params)
         reactor.run()
         # self.writeToCSV(title,dataList)
 
-    def getPageError(self,content,currentPage):
-        print "Error! Page%d"%currentPage        
+    def getPageError(self,content,url):
+        print "Error! url=%s"%url        
         print content
-        print type(content)
-        #reactor.stop()
+        #return defer.returnValue(getPage(url,timeout=TIMEOUT))
+        return
+
+   # @defer.deferredGenerator
+   # def getReviewsFromPage(self,url,title):
+ 
+   #     def deferred1(page):
+   #         d = defer.Deferred()
+   #         reactor.callLater(1,d.callback,self.parseReviewJson(page))
+   #         return d
+
+   #     def deferred2(dataL,title):
+   #          d = defer.Deferred()
+   #          reactor.callLater(1,d.callback,self.writeToCSV(dataL,title=title))
+   #          return d
+
+   #     p = getPage(url,timeout=1)
+   #     p.addErrback(self.getPageError,url,title)
+   #     wfd = defer.waitForDeferred(p)
+   #     yield wfd
+   #     page = wfd.getResult()
+   #     wfd = defer.waitForDeferred(deferred1(page))
+   #     yield wfd
+   #     dataList = wfd.getResult()
+   #     wfd = defer.waitForDeferred(deferred2(dataList,title))
+   #     yield wfd
+

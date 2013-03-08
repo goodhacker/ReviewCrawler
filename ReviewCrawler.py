@@ -5,6 +5,8 @@ import urllib2
 import re
 import time
 import socket
+from SubReviewCrawlers import TaobaoCrawler
+from SubReviewCrawlers import TmallCrawler
 
 headers = {
     "User-Agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.91 Safari/537.11"
@@ -51,11 +53,11 @@ class Crawler:
             print visitUrl
                
             if visitUrl.find("tmall") > -1:
-                crawler = TmallCrawler(visitUrl)
-                crawler.crawle()
+                crawler = TmallCrawler()
+                crawler.crawl(visitUrl)
             else:
-                crawler = TaobaoCrawler(visitUrl)
-                crawler.crawle()             
+                crawler = TaobaoCrawler()
+                crawler.crawl(visitUrl)             
             #将url放入已访问的url中
             self.linkQuence.addVisitedUrl(visitUrl)
  

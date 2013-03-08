@@ -7,6 +7,8 @@ from twisted.web.client import getPage
 from twisted.web.error import Error
 from BaseReviewCrawler import BaseReviewCrawler
 
+TIMEOUT = 1
+
 class TaobaoCrawler(BaseReviewCrawler):
 
     def __init__(self):
@@ -50,18 +52,23 @@ class TaobaoCrawler(BaseReviewCrawler):
             params["currentPageNum"] = cp
             #info = self.getPageFromUrl('http://rate.taobao.com/feedRateList.htm?',params = params)
             url = self.generateReviewUrl(self.urlPrefix,params = params)
-            print url
+
+            while True:
+                p = getPage(url,timeout=TIMEOUT)
+                p.addErrback(self.getPageError,url = url)
+                wfd = defer.waitForDeferred(p)
+                yield wfd
+                page = wfd.getResult()
+                if isinstance(page,str):
+                    break
             
-            wfd = defer.waitForDeferred(getPage(url,timeout=10))
-            yield wfd
-            page = wfd.getResult()
             wfd = defer.waitForDeferred(deferred1(page))
             yield wfd
             dataList = wfd.getResult()
             wfd = defer.waitForDeferred(deferred2(dataList,title))
             yield wfd
             cp = cp+1
-        reactor.stop()
+        #reactor.stop()
 
     def parseReviewJson(self,info):
         dataL = []
@@ -73,20 +80,23 @@ class TaobaoCrawler(BaseReviewCrawler):
             self.running = False
             return dataL
         for item in j["comments"]:
-            if len(item["content"]) < 15:
-                continue
+           # if len(item["content"]) < 15:
+           #     continue
             d = {}
+            d["id"] = item["rateId"]
             d["reviewContent"] = item["content"]
             d["reviewTime"] = item["date"]
             d["userNick"] = item["user"]["nick"]
             d["userId"] = unicode(item["user"]["userId"])
             d["userLink"] = item["user"]["nickUrl"]        
             d["appendReview"] = ""
-            #d["appendTime"] = ""
-            #print item["append"]
+            d["appendTime"] = ""
+            d["appendId"] = ""
             if item["append"] is not None:
+                d["appendId"] = item["append"]["appendId"]
                 d["appendReview"] = item["append"]["content"]
-               
+                d["appendTime"] = item["append"]["dayAfterConfirm"]
+
             dataL.append(d)
 
         return dataL
@@ -139,16 +149,22 @@ class TmallCrawler(BaseReviewCrawler):
             params["currentPage"] = cp
             # info = self.getPageFromUrl('http://rate.tmall.com/list_detail_rate.htm?',params = params)
             url=self.generateReviewUrl(self.urlPrefix,params = params)        
-           
-            wfd = defer.waitForDeferred(getPage(url,timeout=10))
-            yield wfd
-            page = wfd.getResult()
+
+            while True:
+                p = getPage(url,timeout=TIMEOUT)
+                p.addErrback(self.getPageError,url = url)
+                wfd = defer.waitForDeferred(p)
+                yield wfd
+                page = wfd.getResult()
+                if isinstance(page,str):
+                    break
+
             wfd = defer.waitForDeferred(deferred1(page))
             yield wfd
             dataList = wfd.getResult()
             wfd = defer.waitForDeferred(deferred2(dataList,title))
             yield wfd
-        reactor.stop()
+       # reactor.stop()
            
     def parseReviewJson(self,info):
         dataL = []
@@ -156,30 +172,34 @@ class TmallCrawler(BaseReviewCrawler):
         for item in j["rateDetail"]["rateList"]:
             d = {}
             if item["useful"]:
-                if item["dsr"] < 4:
+                if item["dsr"] < 3:
                     continue
-                if len(item["rateContent"]) < 15:
-                    continue
+               # if len(item["rateContent"]) < 15:
+               #     continue
+                d["id"] = item["id"]
                 d["reviewContent"] = item["rateContent"]
                 d["reviewTime"] = item["rateDate"]
+                d["degree"] = item["dsr"]
                 d["userNick"] = item["displayUserNick"]
                 d["userId"] = unicode(item["displayUserNumId"])
                 d["userLink"] = item["displayUserLink"]
                 d["appendReview"] = ""
                 d["appendTime"] = ""
+                d["appendId"] = ""
                 if len(item["appendComment"]) > 0:
+                    d["appendId"] = item["appendComment"]["commentId"]
                     d["appendReview"] = item["appendComment"]["content"]
                     d["appendTime"] = item["appendComment"]["commentTime"]
                 dataL.append(d)
-                print d["userNick"]
-                print d["userId"]
-                print d["reviewContent"]
-                print d["reviewTime"]
-                print "******************************************"
+               # print d["userNick"]
+               # print d["userId"]
+               # print d["reviewContent"]
+               # print d["reviewTime"]
+               # print "******************************************"
         return dataL
 
-crawler = TmallCrawler()
-crawler.crawl("http://detail.tmall.com/item.htm?id=14944940915")
+#crawler = TmallCrawler()
+#crawler.crawl("http://detail.tmall.com/item.htm?id=14944940915")
 
-#crawler2 = TaobaoCrawler()
-#crawler2.crawl("http://item.taobao.com/item.htm?id=17180958841")
+crawler2 = TaobaoCrawler()
+crawler2.crawl("http://item.taobao.com/item.htm?id=17180958841")
