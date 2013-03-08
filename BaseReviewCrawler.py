@@ -2,6 +2,7 @@
 from bs4 import BeautifulSoup
 from DictUnicodeWriter import DictUnicodeWriter
 import codecs
+import csv
 import socket
 import urllib2
 import urllib
@@ -21,7 +22,6 @@ class BaseReviewCrawler:
             return
         print "writeToCSV"
         print title
-        print dataL
         fieldnames = ['reviewContent', 'reviewTime', 'userNick', 'userId','userLink','appendReview','appendTime']
         #dict_writer = csv.DictWriter(codecs.open(title+".csv", "w","utf-8"), fieldnames=fieldnames)
     #   dict_writer.writerow(fieldnames) # CSV??????????????????
