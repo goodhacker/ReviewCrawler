@@ -10,7 +10,8 @@ from BaseReviewCrawler import BaseReviewCrawler
 class TaobaoCrawler(BaseReviewCrawler):
 
     def __init__(self):
-        pass
+        self.urlPrefix = 'http://rate.taobao.com/feedRateList.htm?'
+        self.running = True
     
     def getItemTitle(self,soup):
         return soup.find(id="page").find(id="detail").find("h3").get_text().encode("utf-8")
@@ -28,23 +29,39 @@ class TaobaoCrawler(BaseReviewCrawler):
             if key not in ["userNumId","auctionNumId"]:
                 d.pop(key)
         return d
-
+    
+    @defer.deferredGenerator
     def getReviewsFromPage(self,title,params):
+        
+        def deferred1(page):
+            d = defer.Deferred()
+            reactor.callLater(1,d.callback,self.parseReviewJson(page))
+            return d
+
+        def deferred2(dataL,title):
+            d = defer.Deferred()
+            reactor.callLater(1,d.callback,self.writeToCSV(dataL,title=title))
+            return d
+        
         cp = 1        
-        for cp in range(1,15000):
-            #if cp%50 == 0:
-            #   reactor.run()
-            #   time.sleep(2)
+        #for cp in range(1,15000):
+        while self.running:
             print cp
             params["currentPageNum"] = cp
             #info = self.getPageFromUrl('http://rate.taobao.com/feedRateList.htm?',params = params)
-            url = self.generateReviewUrl('http://rate.taobao.com/feedRateList.htm?',params = params)
+            url = self.generateReviewUrl(self.urlPrefix,params = params)
             print url
-            page = getPage(url,timeout=20)
-            page.addCallback(self.parseReviewJson)
-            page.addCallback(self.writeToCSV,title=title)
-            page.addErrback(self.getPageError,cp)
-        reactor.run()
+            
+            wfd = defer.waitForDeferred(getPage(url,timeout=10))
+            yield wfd
+            page = wfd.getResult()
+            wfd = defer.waitForDeferred(deferred1(page))
+            yield wfd
+            dataList = wfd.getResult()
+            wfd = defer.waitForDeferred(deferred2(dataList,title))
+            yield wfd
+            cp = cp+1
+        reactor.stop()
 
     def parseReviewJson(self,info):
         dataL = []
@@ -53,23 +70,23 @@ class TaobaoCrawler(BaseReviewCrawler):
         except Exception,e:
             print e
         if j["maxPage"] == j["currentPageNum"]:
-            #raise Exception("stop")
+            self.running = False
             return dataL
         for item in j["comments"]:
             if len(item["content"]) < 15:
                 continue
             d = {}
-            d["userNick"] = item["user"]["nick"]
-            d["userId"] = unicode(item["user"]["userId"])
-            d["userLink"] = item["user"]["nickUrl"]
             d["reviewContent"] = item["content"]
             d["reviewTime"] = item["date"]
+            d["userNick"] = item["user"]["nick"]
+            d["userId"] = unicode(item["user"]["userId"])
+            d["userLink"] = item["user"]["nickUrl"]        
             d["appendReview"] = ""
             #d["appendTime"] = ""
             #print item["append"]
             if item["append"] is not None:
                 d["appendReview"] = item["append"]["content"]
-                #d["appendTime"] = item["appendComment"]["commentTime"]
+               
             dataL.append(d)
 
         return dataL
@@ -77,7 +94,7 @@ class TaobaoCrawler(BaseReviewCrawler):
 class TmallCrawler(BaseReviewCrawler):
 
     def __init__(self):
-        pass
+        self.urlPrefix = "http://rate.tmall.com/list_detail_rate.htm?"
     
     def getItemTitle(self,soup):
         return soup.find(id="mainwrap").find(id="detail").find("a").get_text().encode("utf-8")
@@ -97,25 +114,41 @@ class TmallCrawler(BaseReviewCrawler):
         sId = script[idStart+1:script.find(quotation,idStart+1)]
         return sId
 
+    @defer.deferredGenerator
     def getReviewsFromPage(self,title,params):
-       info = self.getPageFromUrl('http://rate.tmall.com/list_detail_rate.htm?',params = params)
-       j = json.loads("{"+info+"}")
-       currentPage = j["rateDetail"]["paginator"]["page"]
-       lastPage = j["rateDetail"]["paginator"]["lastPage"]
-       
-       for cp in range(currentPage,lastPage):
-           print cp
-           if cp%100 == 0:
-              time.sleep(60)
-          # if cp > 2:
-          #     break
-           params["currentPage"] = cp
-          # info = self.getPageFromUrl('http://rate.tmall.com/list_detail_rate.htm?',params = params)
-           url=self.generateReviewUrl('http://rate.tmall.com/list_detail_rate.htm?',params = params)        
-           page=getPage(url,timeout=20)
-           page.addCallback(self.parseReviewJson)           
-           page.addCallback(self.writeToCSV,title=title)
-           page.addErrback(self.getPageError,cp)
+        print "getReviewsFromPage"
+
+        def deferred1(page):
+            d = defer.Deferred()
+            reactor.callLater(1,d.callback,self.parseReviewJson(page))
+            return d
+
+        def deferred2(dataL,title):
+            d = defer.Deferred()
+            reactor.callLater(1,d.callback,self.writeToCSV(dataL,title=title))
+            return d
+
+        info = self.getPageFromUrl('http://rate.tmall.com/list_detail_rate.htm?',params = params)
+        j = json.loads("{"+info+"}")
+        currentPage = j["rateDetail"]["paginator"]["page"]
+        lastPage = j["rateDetail"]["paginator"]["lastPage"]
+        
+        for cp in range(currentPage,lastPage):
+            print cp
+          
+            params["currentPage"] = cp
+            # info = self.getPageFromUrl('http://rate.tmall.com/list_detail_rate.htm?',params = params)
+            url=self.generateReviewUrl(self.urlPrefix,params = params)        
+           
+            wfd = defer.waitForDeferred(getPage(url,timeout=10))
+            yield wfd
+            page = wfd.getResult()
+            wfd = defer.waitForDeferred(deferred1(page))
+            yield wfd
+            dataList = wfd.getResult()
+            wfd = defer.waitForDeferred(deferred2(dataList,title))
+            yield wfd
+        reactor.stop()
            
     def parseReviewJson(self,info):
         dataL = []
@@ -127,22 +160,26 @@ class TmallCrawler(BaseReviewCrawler):
                     continue
                 if len(item["rateContent"]) < 15:
                     continue
-                d["userNick"] = item["displayUserNick"]
-                d["userId"] = unicode(item["displayUserNumId"])
                 d["reviewContent"] = item["rateContent"]
                 d["reviewTime"] = item["rateDate"]
+                d["userNick"] = item["displayUserNick"]
+                d["userId"] = unicode(item["displayUserNumId"])
+                d["userLink"] = item["displayUserLink"]
                 d["appendReview"] = ""
                 d["appendTime"] = ""
                 if len(item["appendComment"]) > 0:
                     d["appendReview"] = item["appendComment"]["content"]
                     d["appendTime"] = item["appendComment"]["commentTime"]
                 dataL.append(d)
-             #  print type(d["userNick"])
-             #  print type(d["userId"])
-             #  print type(d["reviewContent"])
-             #  print type(d["reviewTime"])
-             #  print "******************************************"
+                print d["userNick"]
+                print d["userId"]
+                print d["reviewContent"]
+                print d["reviewTime"]
+                print "******************************************"
         return dataL
 
 crawler = TmallCrawler()
 crawler.crawl("http://detail.tmall.com/item.htm?id=14944940915")
+
+#crawler2 = TaobaoCrawler()
+#crawler2.crawl("http://item.taobao.com/item.htm?id=17180958841")

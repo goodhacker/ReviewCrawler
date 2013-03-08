@@ -1,9 +1,11 @@
 #encoding=utf-8
 from bs4 import BeautifulSoup
-import DictUnicodeWriter
+from DictUnicodeWriter import DictUnicodeWriter
+import codecs
 import socket
 import urllib2
 import urllib
+from twisted.internet import reactor
 
 headers = {
     "User-Agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.91 Safari/537.11"
@@ -17,13 +19,13 @@ class BaseReviewCrawler:
     def writeToCSV(self,dataL,title):
         if len(dataL)==0:
             return
-        fieldnames = ['reviewContent', 'reviewTime', 'userNick', 'userId','userLink','appendReview','appendTime']
-        #dict_writer = csv.DictWriter(codecs.open(title+".csv", "w","utf-8"), fieldnames=fieldnames)
-    #   dict_writer.writerow(fieldnames) # CSV??????????????????
-        f = open(title+'.csv','w')
         print "writeToCSV"
         print title
         print dataL
+        fieldnames = ['reviewContent', 'reviewTime', 'userNick', 'userId','userLink','appendReview','appendTime']
+        #dict_writer = csv.DictWriter(codecs.open(title+".csv", "w","utf-8"), fieldnames=fieldnames)
+    #   dict_writer.writerow(fieldnames) # CSV??????????????????
+        f = open(title.decode("utf-8")+'.csv','a')
         dict_writer = DictUnicodeWriter(f,fieldnames)
         dict_writer.writeheader()
         dict_writer.writerows(dataL)  # rows??????????????????
@@ -51,6 +53,8 @@ class BaseReviewCrawler:
             return page       
         except Exception,e:
             print e
+            print "try again"
+            return self.getPageFromUrl(url,params,timeout,coding)
 
     def crawlReviews(self,url,timeout=20,coding=None):
       #  try:
@@ -89,13 +93,15 @@ class BaseReviewCrawler:
     def crawl(self,url):
         print url
         page = self.getPageFromUrl(url)
-        print page
         soup = BeautifulSoup(page)
         title = self.getItemTitle(soup)
         print title.decode("utf-8").encode("gb2312")
         params = self.crawlQueryParameters(soup)
         print params
-        dataList = self.getReviewsFromPage(title,params)
+        #import pdb
+        #pdb.set_trace()
+        self.getReviewsFromPage(title,params)
+        reactor.run()
         # self.writeToCSV(title,dataList)
 
     def getPageError(self,content,currentPage):

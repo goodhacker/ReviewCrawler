@@ -1,4 +1,5 @@
 import csv
+import codecs
 import cStringIO
 
 #This class from http://stackoverflow.com/questions/5838605/python-dictwriter-writing-utf-8-encoded-csv-files
