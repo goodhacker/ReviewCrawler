@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 from DictUnicodeWriter import DictUnicodeWriter
 import codecs
 import csv
+import os
 import socket
 import urllib2
 import urllib
@@ -25,9 +26,14 @@ class BaseReviewCrawler:
         fieldnames = ['id','reviewContent', 'reviewTime', 'degree','userNick', 'userId','userLink','appendId','appendReview','appendTime']
         #dict_writer = csv.DictWriter(codecs.open(title+".csv", "w","utf-8"), fieldnames=fieldnames)
     #   dict_writer.writerow(fieldnames) # CSV??????????????????
-        f = open("CSV/"+title.decode("utf-8")+'.csv','a')
+        fname = "CSV/"+title.decode("utf-8")+".csv"
+        new = False
+        if not os.path.exists(fname):
+            new = True
+        f = open(fname,'a')
         dict_writer = DictUnicodeWriter(f,fieldnames,delimiter="\t")
-        dict_writer.writeheader()
+        if new:
+            dict_writer.writeheader()
         dict_writer.writerows(dataL)  # rows??????????????????
         dataL=[]
         f.close()
@@ -110,9 +116,9 @@ class BaseReviewCrawler:
 
     def writeJsonToFile(self,jsondata,path,name):
         import json
-        import os
+        path = path.strip("/").decode("utf-8")
         if not os.path.exists(path):
             os.mkdir(path)
-        with codecs.open(path.strip("/").decode("utf-8")+"/"+str(name)+".json","w",'utf-8') as outfile:
+        with codecs.open(path+"/"+str(name)+".json","w",'utf-8') as outfile:
             outfile.write(unicode(json.dumps(jsondata,ensure_ascii=False)))
         
