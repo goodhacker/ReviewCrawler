@@ -3,17 +3,19 @@ import json
 import time
 from bs4 import BeautifulSoup
 from twisted.internet import reactor,defer
-from twisted.web.client import getPage
+from twisted.web.client import getPage,downloadPage
 from twisted.web.error import Error
 from BaseReviewCrawler import BaseReviewCrawler
 
-TIMEOUT = 1
+TIMEOUT = 5
 
 class TaobaoCrawler(BaseReviewCrawler):
 
     def __init__(self):
         self.urlPrefix = 'http://rate.taobao.com/feedRateList.htm?'
         self.running = True
+        self.jsonPath = "Json/Taobao/"
+        self.title = ""
     
     def getItemTitle(self,soup):
         return soup.find(id="page").find(id="detail").find("h3").get_text().encode("utf-8")
@@ -35,9 +37,9 @@ class TaobaoCrawler(BaseReviewCrawler):
     @defer.deferredGenerator
     def getReviewsFromPage(self,title,params):
         
-        def deferred1(page):
+        def deferred1(page,cp):
             d = defer.Deferred()
-            reactor.callLater(1,d.callback,self.parseReviewJson(page))
+            reactor.callLater(1,d.callback,self.parseReviewJson(page,cp))
             return d
 
         def deferred2(dataL,title):
@@ -61,8 +63,8 @@ class TaobaoCrawler(BaseReviewCrawler):
                 page = wfd.getResult()
                 if isinstance(page,str):
                     break
-            
-            wfd = defer.waitForDeferred(deferred1(page))
+
+            wfd = defer.waitForDeferred(deferred1(page,cp))
             yield wfd
             dataList = wfd.getResult()
             wfd = defer.waitForDeferred(deferred2(dataList,title))
@@ -70,12 +72,14 @@ class TaobaoCrawler(BaseReviewCrawler):
             cp = cp+1
         #reactor.stop()
 
-    def parseReviewJson(self,info):
+    def parseReviewJson(self,info,cp):
         dataL = []
         try:
             j = json.loads(unicode(info[info.find("(")+1:info.find(")",-1)-2].replace("\n",""),"gbk"))
         except Exception,e:
             print e
+        self.writeJsonToFile(j,self.jsonPath+self.title,cp)
+
         if j["maxPage"] == j["currentPageNum"]:
             self.running = False
             return dataL
@@ -105,6 +109,8 @@ class TmallCrawler(BaseReviewCrawler):
 
     def __init__(self):
         self.urlPrefix = "http://rate.tmall.com/list_detail_rate.htm?"
+        self.jsonPath = "Json/Tmall/"
+        self.title = ""
     
     def getItemTitle(self,soup):
         return soup.find(id="mainwrap").find(id="detail").find("a").get_text().encode("utf-8")
@@ -128,9 +134,9 @@ class TmallCrawler(BaseReviewCrawler):
     def getReviewsFromPage(self,title,params):
         print "getReviewsFromPage"
 
-        def deferred1(page):
+        def deferred1(page,cp):
             d = defer.Deferred()
-            reactor.callLater(1,d.callback,self.parseReviewJson(page))
+            reactor.callLater(1,d.callback,self.parseReviewJson(page,cp))
             return d
 
         def deferred2(dataL,title):
@@ -159,16 +165,17 @@ class TmallCrawler(BaseReviewCrawler):
                 if isinstance(page,str):
                     break
 
-            wfd = defer.waitForDeferred(deferred1(page))
+            wfd = defer.waitForDeferred(deferred1(page,cp))
             yield wfd
             dataList = wfd.getResult()
             wfd = defer.waitForDeferred(deferred2(dataList,title))
             yield wfd
        # reactor.stop()
            
-    def parseReviewJson(self,info):
+    def parseReviewJson(self,info,cp):
         dataL = []
         j = json.loads("{"+unicode(info,"gbk")+"}")
+        self.writeJsonToFile(j,self.jsonPath+self.title,cp)
         for item in j["rateDetail"]["rateList"]:
             d = {}
             if item["useful"]:
@@ -201,5 +208,5 @@ class TmallCrawler(BaseReviewCrawler):
 #crawler = TmallCrawler()
 #crawler.crawl("http://detail.tmall.com/item.htm?id=14944940915")
 
-crawler2 = TaobaoCrawler()
-crawler2.crawl("http://item.taobao.com/item.htm?id=17180958841")
+#crawler2 = TaobaoCrawler()
+#crawler2.crawl("http://item.taobao.com/item.htm?id=17180958841")

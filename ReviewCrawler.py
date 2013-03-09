@@ -1,5 +1,6 @@
 #encoding=utf-8
 from bs4 import BeautifulSoup
+from twisted.internet import reactor
 import urllib
 import urllib2
 import re
@@ -31,7 +32,7 @@ class Crawler:
         soup=BeautifulSoup(content)
         items=soup.find(id="list-content").find_all(class_="list-item")
         urls = []
-        for item in items:
+        for item in items[:15]:
             item_data = item.find(class_="seller").find("span")
             item_id = item_data["data-item"]
             if self.isTmallItem(item):
@@ -149,6 +150,7 @@ class QuenceFileIO:
 def main(seeds):
     craw=Crawler(seeds)
     craw.crawling(seeds)
+    reactor.run()
 
 if __name__=="__main__":
     firstUrl = "http://s8.taobao.com/search?spm=a230z.1.0.166.JaXcjp&q=%C5%AE%B0%FC&style=grid&atype=b&isnew=2&olu=yes&promoted_service4=4&pid=mm_33705144_3435898_11134072&tab=all&sort=sale-desc"

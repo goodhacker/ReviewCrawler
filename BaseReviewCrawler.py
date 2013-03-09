@@ -16,9 +16,8 @@ headers = {
 
 class BaseReviewCrawler:
     def __init__(self,url):
-        print "Base"
-        baseUrl = url
-             
+        self.title = ""
+     
     def writeToCSV(self,dataL,title):
         if len(dataL)==0:
             return
@@ -26,7 +25,7 @@ class BaseReviewCrawler:
         fieldnames = ['id','reviewContent', 'reviewTime', 'degree','userNick', 'userId','userLink','appendId','appendReview','appendTime']
         #dict_writer = csv.DictWriter(codecs.open(title+".csv", "w","utf-8"), fieldnames=fieldnames)
     #   dict_writer.writerow(fieldnames) # CSV??????????????????
-        f = open(title.decode("utf-8")+'.csv','a')
+        f = open("CSV/"+title.decode("utf-8")+'.csv','a')
         dict_writer = DictUnicodeWriter(f,fieldnames,delimiter="\t")
         dict_writer.writeheader()
         dict_writer.writerows(dataL)  # rows??????????????????
@@ -88,22 +87,19 @@ class BaseReviewCrawler:
     def getReviewsFromPage(self,title,params):
         raise NotImplementedException
 
-   # def getReviewsFromPage(self,url,title):
-   #     raise NotImplementedException
-
-    def parseReviewJson(self,Json):
+    def parseReviewJson(self,info,cp):
         raise NotImplementedException
 
     def crawl(self,url):
         print url
         page = self.getPageFromUrl(url)
         soup = BeautifulSoup(page)
-        title = self.getItemTitle(soup)
-        print title.decode("utf-8").encode("gb2312")
+        self.title = self.getItemTitle(soup)
+        print self.title.decode("utf-8").encode("gb2312")
         params = self.crawlQueryParameters(soup)
         print params
-        self.getReviewsFromPage(title,params)
-        reactor.run()
+        self.getReviewsFromPage(self.title,params)
+        #reactor.run()
         # self.writeToCSV(title,dataList)
 
     def getPageError(self,content,url):
@@ -112,27 +108,11 @@ class BaseReviewCrawler:
         #return defer.returnValue(getPage(url,timeout=TIMEOUT))
         return
 
-   # @defer.deferredGenerator
-   # def getReviewsFromPage(self,url,title):
- 
-   #     def deferred1(page):
-   #         d = defer.Deferred()
-   #         reactor.callLater(1,d.callback,self.parseReviewJson(page))
-   #         return d
-
-   #     def deferred2(dataL,title):
-   #          d = defer.Deferred()
-   #          reactor.callLater(1,d.callback,self.writeToCSV(dataL,title=title))
-   #          return d
-
-   #     p = getPage(url,timeout=1)
-   #     p.addErrback(self.getPageError,url,title)
-   #     wfd = defer.waitForDeferred(p)
-   #     yield wfd
-   #     page = wfd.getResult()
-   #     wfd = defer.waitForDeferred(deferred1(page))
-   #     yield wfd
-   #     dataList = wfd.getResult()
-   #     wfd = defer.waitForDeferred(deferred2(dataList,title))
-   #     yield wfd
-
+    def writeJsonToFile(self,jsondata,path,name):
+        import json
+        import os
+        if not os.path.exists(path):
+            os.mkdir(path)
+        with codecs.open(path.strip("/").decode("utf-8")+"/"+str(name)+".json","w",'utf-8') as outfile:
+            outfile.write(unicode(json.dumps(jsondata,ensure_ascii=False)))
+        
