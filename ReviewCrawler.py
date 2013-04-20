@@ -1,6 +1,6 @@
 #encoding=utf-8
 from bs4 import BeautifulSoup
-from twisted.internet import reactor
+from twisted.internet import reactor,defer
 import urllib
 import urllib2
 import re
@@ -8,10 +8,19 @@ import time
 import socket
 from SubReviewCrawlers import TaobaoCrawler
 from SubReviewCrawlers import TmallCrawler
+import os
+from DictUnicodeWriter import DictUnicodeWriter
+
 
 headers = {
     "User-Agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.91 Safari/537.11"
 }
+
+#Record basic information of the purchase
+#including  title,itemId,sellerId,price,itemUrl,photoUrl
+BASE_INFO_FILE = "itemBaseInfo.csv"
+BASE_INFO_PATH = ''
+ITEM_NUM = 5 #How many items you want to crawl,max 40
 
 class Crawler:
     def __init__(self,seed):
@@ -32,13 +41,50 @@ class Crawler:
         soup=BeautifulSoup(content)
         items=soup.find(id="list-content").find_all(class_="list-item")
         urls = []
-        for item in items[:15]:
-            item_data = item.find(class_="seller").find("span")
-            item_id = item_data["data-item"]
-            if self.isTmallItem(item):
-                urls.append("http://detail.tmall.com/item.htm?id=%s"%item_id)
-            else: urls.append("http://item.taobao.com/item.htm?id=%s"%item_id)
+        for item in items[:min(ITEM_NUM,len(items))]:
+            infoD = self.extractItemBaseInfo(item)
+            itemId = infoD['itemId'] 
+            urls.append(infoD['itemUrl'])
+            self.recordItemBaseInfo(infoD,BASE_INFO_FILE,BASE_INFO_PATH)
         return urls
+
+    def extractItemBaseInfo(self,item):
+        title = item.find(class_ = "summary").find("a")["title"]
+        sellerIdstr = item.find(class_="shopinfo")["dataurl"]
+        begin = sellerIdstr.find("?sid")+5
+        sellerId = sellerIdstr[begin:sellerIdstr.find("&",begin)]
+        #print sellerId
+        itemId = item.find(class_="seller").find("span")["data-item"]
+        price = item.find(class_="price").find("em").string
+        #print price
+        picurl = item.find(class_="photo").find('a').find('span').find('img')['data-ks-lazyload']
+        #print picurl
+        itemUrl = ""
+        if self.isTmallItem(item):
+            itemUrl="http://detail.tmall.com/item.htm?id=%s"%itemId
+        else:
+            itemUrl = "http://item.taobao.com/item.htm?id=%s"%itemId
+        infoD = {}
+        infoD['title'] = title
+        infoD['itemId'] = itemId
+        infoD['sellerId']= sellerId
+        infoD['price']= price
+        infoD['itemUrl']= itemUrl
+        infoD['photoUrl'] = picurl
+        return infoD
+        
+    def recordItemBaseInfo(self,infoD,filename,path):
+        fieldnames = ['title','itemId','sellerId','price','itemUrl','photoUrl']
+        fname = path+filename
+        new = False
+        if not os.path.exists(fname):
+            new = True
+        f = open(path+filename,'a')
+        dictWriter = DictUnicodeWriter(f,fieldnames,delimiter="\t")
+        if new:
+            dictWriter.writeheader()
+        dictWriter.writerow(infoD)
+        f.close()
 
     def isTmallItem(self,item):
         return True if item.find(class_="mall-icon") else False
@@ -90,7 +136,6 @@ class linkQuence:
         #已访问的url集合
         self.visted=[]
         visitedList = QuenceFileIO().readVisited()
-        print visitedList
         self.visted.extend(visitedList)
         #待访问的url集合
         self.unVisited=[]
@@ -136,15 +181,12 @@ class QuenceFileIO:
         f.flush()
         f.close()
     def readVisited(self):
-        f=open('visited.dat','r')
-        urls = []
-        while True:
-            line = f.readline().strip('\n')
-            if not line:
-                break
-            urls.append(line)
-        f.close()
-        return urls
+        try:
+            with open('visited.dat','r') as f:
+                return [line.strip('\n') for line in f.readlines()]
+        except:
+            open('visited.dat','w')
+        return []
         
     
 def main(seeds):
@@ -153,7 +195,7 @@ def main(seeds):
     reactor.run()
 
 if __name__=="__main__":
-    firstUrl = "http://s8.taobao.com/search?spm=a230z.1.0.166.JaXcjp&q=%C5%AE%B0%FC&style=grid&atype=b&isnew=2&olu=yes&promoted_service4=4&pid=mm_33705144_3435898_11134072&tab=all&sort=sale-desc"
+    firstUrl = "http://s8.taobao.com/search?spm=a230z.1.5634025.12.8B25Ya&q=%C5%AE%B0%FC&initiative_id=staobaoz_20130315&style=grid&source=suggest&suggest=0_1&from_bt=1&unid=0&mode=63&pid=mm_33705144_3435898_11134072&sort=sale-desc#J_Filter"
     main(firstUrl)
 
    # http://rate.tmall.com/list_detail_rate.htm?itemId=17599831517&spuId=209936077&sellerId=1036065909&currentPage=0

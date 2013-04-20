@@ -15,18 +15,20 @@ headers = {
     "User-Agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.91 Safari/537.11"
 }
 
+CSV_PATH = "CSV/"
+
 class BaseReviewCrawler:
     def __init__(self,url):
         self.title = ""
      
-    def writeToCSV(self,dataL,title):
+    def writeToCSV(self,dataL,filename):
         if len(dataL)==0:
             return
         print "writeToCSV"
         fieldnames = ['id','reviewContent', 'reviewTime', 'degree','userNick', 'userId','userLink','appendId','appendReview','appendTime']
         #dict_writer = csv.DictWriter(codecs.open(title+".csv", "w","utf-8"), fieldnames=fieldnames)
     #   dict_writer.writerow(fieldnames) # CSV??????????????????
-        fname = "CSV/"+title.decode("utf-8")+".csv"
+        fname = CSV_PATH+filename.decode("utf-8")+".csv"
         new = False
         if not os.path.exists(fname):
             new = True
@@ -34,7 +36,7 @@ class BaseReviewCrawler:
         dict_writer = DictUnicodeWriter(f,fieldnames,delimiter="\t")
         if new:
             dict_writer.writeheader()
-        dict_writer.writerows(dataL)  # rows??????????????????
+        dict_writer.writerows(dataL)  
         dataL=[]
         f.close()
 

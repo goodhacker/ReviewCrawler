@@ -16,6 +16,7 @@ class TaobaoCrawler(BaseReviewCrawler):
         self.running = True
         self.jsonPath = "Json/Taobao/"
         self.title = ""
+        self.itemId = ""
     
     def getItemTitle(self,soup):
         return soup.find(id="page").find(id="detail").find("h3").get_text().encode("utf-8")
@@ -32,6 +33,7 @@ class TaobaoCrawler(BaseReviewCrawler):
         for key in d.keys():
             if key not in ["userNumId","auctionNumId"]:
                 d.pop(key)
+        self.itemId = d['auctionNumId']
         return d
     
     @defer.deferredGenerator
@@ -42,9 +44,9 @@ class TaobaoCrawler(BaseReviewCrawler):
             reactor.callLater(1,d.callback,self.parseReviewJson(page,cp))
             return d
 
-        def deferred2(dataL,title):
+        def deferred2(dataL,csvname):
             d = defer.Deferred()
-            reactor.callLater(1,d.callback,self.writeToCSV(dataL,title=title))
+            reactor.callLater(1,d.callback,self.writeToCSV(dataL,filename=csvname))
             return d
         
         cp = 1        
@@ -67,10 +69,10 @@ class TaobaoCrawler(BaseReviewCrawler):
             wfd = defer.waitForDeferred(deferred1(page,cp))
             yield wfd
             dataList = wfd.getResult()
-            wfd = defer.waitForDeferred(deferred2(dataList,title))
+            #wfd = defer.waitForDeferred(deferred2(dataList,title))
+            wfd = defer.waitForDeferred(deferred2(dataList,params['auctionNumId']))
             yield wfd
             cp = cp+1
-        #reactor.stop()
 
     def parseReviewJson(self,info,cp):
         dataL = []
@@ -78,7 +80,7 @@ class TaobaoCrawler(BaseReviewCrawler):
             j = json.loads(unicode(info[info.find("(")+1:info.find(")",-1)-2].replace("\n",""),"gbk"))
         except Exception,e:
             print e
-        self.writeJsonToFile(j,self.jsonPath+self.title,cp)
+        self.writeJsonToFile(j,self.jsonPath+self.itemId,cp)
 
         if j["maxPage"] == j["currentPageNum"]:
             self.running = False
@@ -111,16 +113,18 @@ class TmallCrawler(BaseReviewCrawler):
         self.urlPrefix = "http://rate.tmall.com/list_detail_rate.htm?"
         self.jsonPath = "Json/Tmall/"
         self.title = ""
+        self.itemId = ""
     
     def getItemTitle(self,soup):
-        return soup.find(id="mainwrap").find(id="detail").find("a").get_text().encode("utf-8")
+        return soup.find(id="content").find(id="detail").find("a").get_text().encode("utf-8")
 
     def crawlQueryParameters(self,soup):     
-        script = soup.find("div",id="J_itemViewed").find_next().get_text()
+        script = soup.find("form",id="J_FrmBid").find_next_sibling().get_text()
         d = {}
         d['spuId'] = self.findIdString(script,'spuId')
         d['sellerId'] = self.findIdString(script,'userId')
         d['itemId'] = self.findIdString(script,'itemId')
+        self.itemId = d['itemId']
         return d
 
     def findIdString(self,script,string):
@@ -139,9 +143,9 @@ class TmallCrawler(BaseReviewCrawler):
             reactor.callLater(1,d.callback,self.parseReviewJson(page,cp))
             return d
 
-        def deferred2(dataL,title):
+        def deferred2(dataL,csvname):
             d = defer.Deferred()
-            reactor.callLater(1,d.callback,self.writeToCSV(dataL,title=title))
+            reactor.callLater(1,d.callback,self.writeToCSV(dataL,filename=csvname))
             return d
 
         info = self.getPageFromUrl('http://rate.tmall.com/list_detail_rate.htm?',params = params)
@@ -168,19 +172,18 @@ class TmallCrawler(BaseReviewCrawler):
             wfd = defer.waitForDeferred(deferred1(page,cp))
             yield wfd
             dataList = wfd.getResult()
-            wfd = defer.waitForDeferred(deferred2(dataList,title))
+            wfd = defer.waitForDeferred(deferred2(dataList,self.itemId))
             yield wfd
-       # reactor.stop()
            
     def parseReviewJson(self,info,cp):
         dataL = []
         j = json.loads("{"+unicode(info,"gbk")+"}")
-        self.writeJsonToFile(j,self.jsonPath+self.title,cp)
+        self.writeJsonToFile(j,self.jsonPath+self.itemId,cp)
         for item in j["rateDetail"]["rateList"]:
             d = {}
             if item["useful"]:
-                if item["dsr"] < 3:
-                    continue
+                #if item["dsr"] < 3:
+                #    continue
                # if len(item["rateContent"]) < 15:
                #     continue
                 d["id"] = item["id"]
